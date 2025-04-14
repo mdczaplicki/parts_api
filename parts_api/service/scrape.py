@@ -1,5 +1,5 @@
 import asyncio
-from asyncio import TaskGroup, BoundedSemaphore
+from asyncio import TaskGroup, BoundedSemaphore, Task
 from time import time
 from typing import Final, Generator, NamedTuple
 
@@ -59,33 +59,46 @@ async def main() -> None:
     now = time()
     async with ClientSession() as session:
         catalogue_tag = await _get_tag(session, _CATALOGUE_PATH)
-        manufacturer_tag_tasks = []
+        manufacturer_tasks: list[tuple[str, Task]] = []
         print(".")
         async with TaskGroup() as task_group:
             for manufacturer in stream_manufacturers(catalogue_tag):
-                if manufacturer.name != "Volvo":
-                    continue
-                manufacturer_tag_tasks.append(
-                    task_group.create_task(_get_tag(session, manufacturer.path))
+                manufacturer_tasks.append(
+                    (
+                        manufacturer.name,
+                        task_group.create_task(_get_tag(session, manufacturer.path)),
+                    )
                 )
         print(".")
-        category_tag_tasks = []
+        category_tasks: list[tuple[str, str, Task]] = []
         async with TaskGroup() as task_group:
-            for manufacturer_task in manufacturer_tag_tasks:
+            for (
+                manufacturer_name,
+                manufacturer_task,
+            ) in manufacturer_tasks:
                 for category in stream_categories(manufacturer_task.result()):
-                    category_tag_tasks.append(
-                        task_group.create_task(_get_tag(session, category.path))
+                    category_tasks.append(
+                        (
+                            manufacturer_name,
+                            category.name,
+                            task_group.create_task(_get_tag(session, category.path)),
+                        )
                     )
         print(".")
-        model_tag_tasks = []
+        model_tasks: list[tuple[str, str, str, Task]] = []
         async with TaskGroup() as task_group:
-            for category_task in category_tag_tasks:
+            for manufacturer_name, category_name, category_task in category_tasks:
                 for model in stream_models(category_task.result()):
-                    model_tag_tasks.append(
-                        task_group.create_task(_get_tag(session, model.path))
+                    model_tasks.append(
+                        (
+                            manufacturer_name,
+                            category_name,
+                            model.name,
+                            task_group.create_task(_get_tag(session, model.path)),
+                        )
                     )
         print(".")
-        for model_task in model_tag_tasks:
+        for manufacturer_name, category_name, model_name, model_task in model_tasks:
             for part in stream_parts(model_task.result()):
                 ...
 
