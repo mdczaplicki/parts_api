@@ -33,33 +33,29 @@ async def get_all_manufacturers(
         yield TagInfo(name=tag.text.strip(), path=tag["href"])
 
 
-async def get_categories(
-    session: ClientSession, path: str
-) -> AsyncGenerator[TagInfo, None]:
+async def get_categories(session: ClientSession, path: str) -> list[TagInfo]:
     url = _BASE_URL / path
     soup = await _get_soup_from_url(session, url)
     tags = soup.select("div.allcategories > * a")
-    for tag in tags:
-        yield TagInfo(name=tag.text.strip(), path=tag["href"])
+    return [TagInfo(name=tag.text.strip(), path=tag["href"]) for tag in tags]
 
 
-async def get_models(
-    session: ClientSession, path: str
-) -> AsyncGenerator[TagInfo, None]:
+async def get_models(session: ClientSession, path: str) -> list[TagInfo]:
     url = _BASE_URL / path
     soup = await _get_soup_from_url(session, url)
     tags = soup.select("div.allmodels > * a")
-    for tag in tags:
-        yield TagInfo(name=tag.text.strip(), path=tag["href"])
+    return [TagInfo(name=tag.text.strip(), path=tag["href"]) for tag in tags]
 
 
-async def get_parts(session: ClientSession, path: str) -> AsyncGenerator[TagInfo, None]:
+async def get_parts(session: ClientSession, path: str) -> list[TagInfo]:
     url = _BASE_URL / path
     soup = await _get_soup_from_url(session, url)
     tags = soup.select("div.allparts > * a")
+    output = []
     for tag in tags:
         part_number = tag.text.split("-")[0].strip()
-        yield TagInfo(name=part_number, path=tag["href"])
+        output.append(TagInfo(name=part_number, path=tag["href"]))
+    return output
 
 
 async def main() -> None:
@@ -69,21 +65,30 @@ async def main() -> None:
         category_tasks = set()
         async with TaskGroup() as category_task_group:
             async for manufacturer in get_all_manufacturers(session):
-                if manufacturer.name != "Ammann":
-                    break
-                category_tasks.add(category_task_group.create_task(
-                    get_categories(session, manufacturer.path)
-                ))
-        model_tasks =set()
+                if manufacturer.name != "Volvo":
+                    continue
+                category_tasks.add(
+                    category_task_group.create_task(
+                        get_categories(session, manufacturer.path)
+                    )
+                )
+        print(".")
+        model_tasks = set()
         async with TaskGroup() as model_task_group:
             for category_task in category_tasks:
                 for category in category_task.result():
-                    model_tasks.add(model_task_group.create_task(get_models(session, category.path)))
+                    model_tasks.add(
+                        model_task_group.create_task(get_models(session, category.path))
+                    )
+        print(".")
         part_tasks = set()
         async with TaskGroup() as part_task_group:
             for model_task in model_tasks:
                 for model in model_task.result():
-                    part_tasks.add(part_task_group.create_task(get_parts(session, model.path)))
+                    part_tasks.add(
+                        part_task_group.create_task(get_parts(session, model.path))
+                    )
+        print(".")
         for part_task in part_tasks:
             for part in part_task.result():
                 parts.append(part)
