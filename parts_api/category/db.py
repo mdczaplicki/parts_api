@@ -1,3 +1,4 @@
+from typing import Iterable
 from uuid import UUID
 
 from sqlalchemy import insert, delete
@@ -15,7 +16,7 @@ async def clear_categories(db_connection: AsyncConnection) -> None:
 
 @inject_db_connection
 async def insert_many_categories(
-    names: list[str], db_connection: AsyncConnection
+    names: Iterable[str], db_connection: AsyncConnection
 ) -> dict[str, UUID]:
     statement = (
         insert(CategoryTable)

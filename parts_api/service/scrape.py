@@ -4,7 +4,7 @@ from time import time
 from typing import Final, Generator, NamedTuple
 
 from aiohttp import ClientSession
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup, Tag, SoupStrainer
 from yarl import URL
 
 from parts_api.category.db import insert_many_categories, clear_categories
@@ -29,8 +29,9 @@ async def _get_tag_from_url(session: ClientSession, url: URL) -> Tag:
     async with _SEMAPHORE:
         response = await session.get(url)
         content = await response.text()
-    html_soup = BeautifulSoup(content, "html.parser")
-    return html_soup.select_one("#content")
+    strainer = SoupStrainer(id="content")
+    html_soup = BeautifulSoup(content, "html.parser", parse_only=strainer)
+    return html_soup
 
 
 async def _get_tag(session: ClientSession, path: str) -> Tag:
@@ -70,8 +71,6 @@ async def main() -> None:
         print(".")
         async with TaskGroup() as task_group:
             for manufacturer in stream_manufacturers(catalogue_tag):
-                if manufacturer.name != "Ammann":
-                    continue
                 manufacturer_tasks.append(
                     (
                         manufacturer.name,
@@ -101,7 +100,7 @@ async def main() -> None:
         print(".")
         await clear_categories()
         category_name_to_uuid = await insert_many_categories(
-            [name for _, name, __ in category_tasks]
+            {name for _, name, __ in category_tasks}
         )
         print(category_name_to_uuid)
         model_tasks: list[tuple[str, str, str, Task]] = []
