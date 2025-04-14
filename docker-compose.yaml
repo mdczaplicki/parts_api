@@ -1,0 +1,12 @@
+services:
+  parts_db:
+    image: postgres:17.4
+    container_name: parts_db
+    command: "postgres -c jit=off -c password_encryption=md5"
+    environment:
+      - POSTGRES_DB=parts-db
+      - POSTGRES_USER=parts
+      - POSTGRES_PASSWORD=parts
+    ports:
+      - "5452:5432"
+    restart: "no"
