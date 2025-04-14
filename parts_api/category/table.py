@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Mapped, MappedColumn, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy_utils import Timestamp
 
 from parts_api.db import PrimaryKeyUUIDTableMixin, BaseModel

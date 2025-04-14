@@ -8,7 +8,6 @@ from uuid import UUID, uuid4
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine, AsyncConnection
 from sqlalchemy.orm import DeclarativeBase, declared_attr, Mapped, mapped_column
-from sqlalchemy.util import generic_repr
 
 from parts_api.settings.db import DATABASE_SETTINGS
 
@@ -17,7 +16,6 @@ camel_case_to_snake_case_pattern = re.compile(r"(?<!^)(?=[A-Z])")
 F = TypeVar("F", bound=Callable[..., Any])
 
 
-@generic_repr
 class BaseModel(DeclarativeBase):
     @declared_attr.directive
     def __tablename__(cls) -> str:

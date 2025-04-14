@@ -7,6 +7,7 @@ from sqlalchemy import pool
 from alembic import context
 
 from parts_api.category.table import CategoryTable  # noqa: F401
+from parts_api.db import BaseModel
 from parts_api.manufacturer.table import ManufacturerTable  # noqa: F401
 from parts_api.model.table import ModelTable  # noqa: F401
 from parts_api.part.table import PartTable  # noqa: F401
@@ -30,7 +31,7 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-target_metadata = None
+target_metadata = BaseModel.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

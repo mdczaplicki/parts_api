@@ -8,5 +8,5 @@ services:
       - POSTGRES_USER=parts
       - POSTGRES_PASSWORD=parts
     ports:
-      - "5452:5432"
+      - "5432:5432"
     restart: "no"
