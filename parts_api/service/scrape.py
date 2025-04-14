@@ -1,100 +1,95 @@
 import asyncio
-from asyncio import TaskGroup
+from asyncio import TaskGroup, BoundedSemaphore
 from time import time
-from typing import Final, AsyncGenerator
+from typing import Final, Generator, NamedTuple
 
 from aiohttp import ClientSession
-from bs4 import BeautifulSoup
-from pydantic import BaseModel
+from bs4 import BeautifulSoup, Tag
 from yarl import URL
 
 _BASE_URL: Final[URL] = URL("https://www.urparts.com/")
 _CATALOGUE_PATH: Final[str] = "index.cfm/page/catalogue"
 
+_SEMAPHORE = BoundedSemaphore(50)
 
-class TagInfo(BaseModel):
+
+class TagInfo(NamedTuple):
     name: str
     path: str
 
 
-async def _get_soup_from_url(session: ClientSession, url: URL) -> BeautifulSoup:
-    response = await session.get(url)
-    content = await response.text()
-    return BeautifulSoup(content, "html.parser")
+async def _get_tag_from_url(session: ClientSession, url: URL) -> Tag:
+    async with _SEMAPHORE:
+        response = await session.get(url)
+        content = await response.text()
+    html_soup = BeautifulSoup(content, "html.parser")
+    return html_soup.select_one("#content")
 
 
-async def get_all_manufacturers(
-    session: ClientSession,
-) -> AsyncGenerator[TagInfo, None]:
-    url = _BASE_URL / _CATALOGUE_PATH
-    soup = await _get_soup_from_url(session, url)
-    tags = soup.select("div.allmakes > * a")
+async def _get_tag(session: ClientSession, path: str) -> Tag:
+    return await _get_tag_from_url(session, _BASE_URL / path)
+
+
+def stream_manufacturers(catalogue_tag: Tag) -> Generator[TagInfo, None, None]:
+    tags = catalogue_tag.select("div.allmakes > * a")
     for tag in tags:
         yield TagInfo(name=tag.text.strip(), path=tag["href"])
 
 
-async def get_categories(session: ClientSession, path: str) -> list[TagInfo]:
-    url = _BASE_URL / path
-    soup = await _get_soup_from_url(session, url)
-    tags = soup.select("div.allcategories > * a")
-    return [TagInfo(name=tag.text.strip(), path=tag["href"]) for tag in tags]
+def stream_categories(manufacturer_tag: Tag) -> Generator[TagInfo, None, None]:
+    tags = manufacturer_tag.select("div.allcategories > * a")
+    for tag in tags:
+        yield TagInfo(name=tag.text.strip(), path=tag["href"])
 
 
-async def get_models(session: ClientSession, path: str) -> list[TagInfo]:
-    url = _BASE_URL / path
-    soup = await _get_soup_from_url(session, url)
-    tags = soup.select("div.allmodels > * a")
-    return [TagInfo(name=tag.text.strip(), path=tag["href"]) for tag in tags]
+def stream_models(category_tag: Tag) -> Generator[TagInfo, None, None]:
+    tags = category_tag.select("div.allmodels > * a")
+    for tag in tags:
+        yield TagInfo(name=tag.text.strip(), path=tag["href"])
 
 
-async def get_parts(session: ClientSession, path: str) -> list[TagInfo]:
-    url = _BASE_URL / path
-    soup = await _get_soup_from_url(session, url)
-    tags = soup.select("div.allparts > * a")
-    output = []
+def stream_parts(model_tag: Tag) -> Generator[TagInfo, None, None]:
+    tags = model_tag.select("div.allparts > * a")
     for tag in tags:
         part_number = tag.text.split("-")[0].strip()
-        output.append(TagInfo(name=part_number, path=tag["href"]))
-    return output
+        yield TagInfo(name=part_number, path=tag["href"])
 
 
 async def main() -> None:
-    parts = []
     now = time()
     async with ClientSession() as session:
-        category_tasks = set()
-        async with TaskGroup() as category_task_group:
-            async for manufacturer in get_all_manufacturers(session):
+        catalogue_tag = await _get_tag(session, _CATALOGUE_PATH)
+        manufacturer_tag_tasks = []
+        print(".")
+        async with TaskGroup() as task_group:
+            for manufacturer in stream_manufacturers(catalogue_tag):
                 if manufacturer.name != "Volvo":
                     continue
-                category_tasks.add(
-                    category_task_group.create_task(
-                        get_categories(session, manufacturer.path)
-                    )
+                manufacturer_tag_tasks.append(
+                    task_group.create_task(_get_tag(session, manufacturer.path))
                 )
         print(".")
-        model_tasks = set()
-        async with TaskGroup() as model_task_group:
-            for category_task in category_tasks:
-                for category in category_task.result():
-                    model_tasks.add(
-                        model_task_group.create_task(get_models(session, category.path))
+        category_tag_tasks = []
+        async with TaskGroup() as task_group:
+            for manufacturer_task in manufacturer_tag_tasks:
+                for category in stream_categories(manufacturer_task.result()):
+                    category_tag_tasks.append(
+                        task_group.create_task(_get_tag(session, category.path))
                     )
         print(".")
-        part_tasks = set()
-        async with TaskGroup() as part_task_group:
-            for model_task in model_tasks:
-                for model in model_task.result():
-                    part_tasks.add(
-                        part_task_group.create_task(get_parts(session, model.path))
+        model_tag_tasks = []
+        async with TaskGroup() as task_group:
+            for category_task in category_tag_tasks:
+                for model in stream_models(category_task.result()):
+                    model_tag_tasks.append(
+                        task_group.create_task(_get_tag(session, model.path))
                     )
         print(".")
-        for part_task in part_tasks:
-            for part in part_task.result():
-                parts.append(part)
+        for model_task in model_tag_tasks:
+            for part in stream_parts(model_task.result()):
+                ...
 
     print("Processing time: ", time() - now)
-    print("Number of parts: ", len(parts))
 
 
 if __name__ == "__main__":
