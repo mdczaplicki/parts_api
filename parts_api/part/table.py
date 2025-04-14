@@ -8,5 +8,7 @@ from parts_api.db import PrimaryKeyUUIDTableMixin, BaseModel
 
 
 class PartTable(PrimaryKeyUUIDTableMixin, Timestamp, BaseModel):
-    name: Mapped[str] = mapped_column(unique=True)
-    model_uuid: Mapped[UUID] = mapped_column(ForeignKey("model.uuid"))
+    name: Mapped[str]
+    model_uuid: Mapped[UUID] = mapped_column(
+        ForeignKey("model.uuid", ondelete="CASCADE")
+    )

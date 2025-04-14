@@ -7,6 +7,13 @@ from aiohttp import ClientSession
 from bs4 import BeautifulSoup, Tag
 from yarl import URL
 
+from parts_api.category.db import insert_many_categories, clear_categories
+from parts_api.manufacturer.db import insert_many_manufacturers, clear_manufacturers
+from parts_api.model.db import clear_models, insert_many_models
+from parts_api.model.schema import CreateModelTuple
+from parts_api.part.db import insert_many_parts
+from parts_api.part.schema import CreatePartTuple
+
 _BASE_URL: Final[URL] = URL("https://www.urparts.com/")
 _CATALOGUE_PATH: Final[str] = "index.cfm/page/catalogue"
 
@@ -63,6 +70,8 @@ async def main() -> None:
         print(".")
         async with TaskGroup() as task_group:
             for manufacturer in stream_manufacturers(catalogue_tag):
+                if manufacturer.name != "Ammann":
+                    continue
                 manufacturer_tasks.append(
                     (
                         manufacturer.name,
@@ -70,6 +79,11 @@ async def main() -> None:
                     )
                 )
         print(".")
+        await clear_manufacturers()
+        manufacturer_name_to_uuid = await insert_many_manufacturers(
+            [name for name, _ in manufacturer_tasks]
+        )
+        print(manufacturer_name_to_uuid)
         category_tasks: list[tuple[str, str, Task]] = []
         async with TaskGroup() as task_group:
             for (
@@ -85,6 +99,11 @@ async def main() -> None:
                         )
                     )
         print(".")
+        await clear_categories()
+        category_name_to_uuid = await insert_many_categories(
+            [name for _, name, __ in category_tasks]
+        )
+        print(category_name_to_uuid)
         model_tasks: list[tuple[str, str, str, Task]] = []
         async with TaskGroup() as task_group:
             for manufacturer_name, category_name, category_task in category_tasks:
@@ -98,9 +117,27 @@ async def main() -> None:
                         )
                     )
         print(".")
+        await clear_models()
+        model_name_to_uuid = await insert_many_models(
+            [
+                CreateModelTuple(
+                    name=model_name,
+                    manufacturer_uuid=manufacturer_name_to_uuid[manufacturer_name],
+                    category_uuid=category_name_to_uuid[category_name],
+                )
+                for manufacturer_name, category_name, model_name, _ in model_tasks
+            ]
+        )
+        print(model_name_to_uuid)
         for manufacturer_name, category_name, model_name, model_task in model_tasks:
+            insert_buffer = []
             for part in stream_parts(model_task.result()):
-                ...
+                insert_buffer.append(
+                    CreatePartTuple(part.name, model_name_to_uuid[model_name])
+                )
+                if len(insert_buffer) >= 50:
+                    await insert_many_parts(insert_buffer)
+                    insert_buffer = []
 
     print("Processing time: ", time() - now)
 
