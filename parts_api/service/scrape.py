@@ -1,4 +1,6 @@
 import asyncio
+from asyncio import TaskGroup
+from time import time
 from typing import Final, AsyncGenerator
 
 from aiohttp import ClientSession
@@ -51,9 +53,7 @@ async def get_models(
         yield TagInfo(name=tag.text.strip(), path=tag["href"])
 
 
-async def get_parts(
-        session: ClientSession, path: str
-) -> AsyncGenerator[TagInfo, None]:
+async def get_parts(session: ClientSession, path: str) -> AsyncGenerator[TagInfo, None]:
     url = _BASE_URL / path
     soup = await _get_soup_from_url(session, url)
     tags = soup.select("div.allparts > * a")
@@ -63,12 +63,33 @@ async def get_parts(
 
 
 async def main() -> None:
+    parts = []
+    now = time()
     async with ClientSession() as session:
-        async for manufacturer in get_all_manufacturers(session):
-            async for category in get_categories(session, manufacturer.path):
-                async for model in get_models(session, category.path):
-                    async for part in get_parts(session, model.path):
-                        print(part)
+        category_tasks = set()
+        async with TaskGroup() as category_task_group:
+            async for manufacturer in get_all_manufacturers(session):
+                if manufacturer.name != "Ammann":
+                    break
+                category_tasks.add(category_task_group.create_task(
+                    get_categories(session, manufacturer.path)
+                ))
+        model_tasks =set()
+        async with TaskGroup() as model_task_group:
+            for category_task in category_tasks:
+                for category in category_task.result():
+                    model_tasks.add(model_task_group.create_task(get_models(session, category.path)))
+        part_tasks = set()
+        async with TaskGroup() as part_task_group:
+            for model_task in model_tasks:
+                for model in model_task.result():
+                    part_tasks.add(part_task_group.create_task(get_parts(session, model.path)))
+        for part_task in part_tasks:
+            for part in part_task.result():
+                parts.append(part)
+
+    print("Processing time: ", time() - now)
+    print("Number of parts: ", len(parts))
 
 
 if __name__ == "__main__":
