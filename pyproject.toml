@@ -23,3 +23,6 @@ dependencies = [
     "yarl>=1.19.0",
 ]
 
+[project.scripts]
+scrape = "parts_api.worker.scrape:sync_main"
+

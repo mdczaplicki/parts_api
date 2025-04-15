@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from asyncio import BoundedSemaphore
 from time import time
 from typing import Final, NamedTuple, cast
@@ -14,6 +15,9 @@ from parts_api.model.db import clear_models, insert_many_models
 from parts_api.model.schema import CreateModelTuple
 from parts_api.part.db import insert_many_parts
 from parts_api.part.schema import CreatePartTuple
+
+logging.basicConfig(level=logging.INFO)
+_LOGGER = logging.getLogger(__name__)
 
 _BASE_URL: Final[URL] = URL("https://www.urparts.com/")
 _CATALOGUE_PATH: Final[str] = "index.cfm/page/catalogue"
@@ -66,8 +70,6 @@ async def process_model(
     insert_buffer: list[CreatePartTuple] = []
 
     for part in stream_parts(model_tag):
-        if part.name is None:
-            print(model.name)
         insert_buffer.append(CreatePartTuple(part.name, model_uuid))
 
     return insert_buffer
@@ -128,23 +130,24 @@ async def process_manufacturer(
     return category_name_to_uuid
 
 
-async def main():
+async def main() -> None:
+    _LOGGER.info("Scraping started")
     start = time()
+    _LOGGER.info("Clearing the database")
+    await clear_manufacturers()
+    await clear_categories()
+    await clear_models()
     async with ClientSession() as session:
         catalogue_tag = await _get_tag(session, _CATALOGUE_PATH)
         manufacturers = list(stream_manufacturers(catalogue_tag))
 
-        await clear_manufacturers()
         manufacturer_name_to_uuid = await insert_many_manufacturers(
             [m.name for m in manufacturers]
         )
-
-        await clear_categories()
-        await clear_models()
         category_name_to_uuid = {}
 
         for manufacturer in manufacturers:
-            print(f"Processing: {manufacturer.name}")
+            _LOGGER.info(f"Processing: {manufacturer.name}")
             category_name_to_uuid = await process_manufacturer(
                 session,
                 manufacturer,
@@ -152,8 +155,12 @@ async def main():
                 category_name_to_uuid,
             )
 
-    print("Done. Total time:", time() - start)
+    _LOGGER.info("Done. Total time: %s", time() - start)
+
+
+def sync_main() -> None:
+    asyncio.run(main())
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    sync_main()

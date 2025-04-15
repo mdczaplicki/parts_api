@@ -9,4 +9,37 @@ services:
       - POSTGRES_PASSWORD=parts
     ports:
       - "5432:5432"
-    restart: "no"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  base_app: &base_app
+    image: parts_api
+    build:
+      dockerfile: _docker/Dockerfile
+      context: .
+    environment:
+      - DATABASE_CONNECTION_STRING=postgresql+asyncpg://parts:parts@parts_db:5432/parts-db
+    depends_on:
+      parts_db:
+        condition: service_healthy
+
+  migrate:
+    <<: *base_app
+    container_name: migrations
+    command: "uv run alembic upgrade head"
+
+  api:
+    <<: *base_app
+    container_name: parts_api
+    command: "uv run uvicorn --host=0.0.0.0 --reload parts_api.worker.api:app"
+    ports:
+      - "8080:8000"
+
+  scraper:
+    <<: *base_app
+    container_name: scraper
+    command: "uv run scrape"
