@@ -18,15 +18,13 @@ async def insert_many_parts(
 ) -> None:
     statement = (
         insert(PartTable)
-        .values(
-            [
-                {
-                    PartTable.name: s.name,
-                    PartTable.model_uuid: s.model_uuid,
-                }
-                for s in create_schemas
-            ]
-        )
         .returning(PartTable.uuid, PartTable.name)
     )
-    await db_connection.execute(statement)
+    await db_connection.execute(statement,
+            [
+                {
+                    "name": s.name,
+                    "model_uuid": s.model_uuid,
+                }
+                for s in create_schemas
+            ])

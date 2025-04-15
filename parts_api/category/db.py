@@ -1,7 +1,8 @@
 from typing import Iterable
 from uuid import UUID
 
-from sqlalchemy import insert, delete
+from sqlalchemy import delete
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from parts_api.category.table import CategoryTable
@@ -21,6 +22,7 @@ async def insert_many_categories(
     statement = (
         insert(CategoryTable)
         .values([{CategoryTable.name: name} for name in names])
+        .on_conflict_do_nothing()
         .returning(CategoryTable.uuid, CategoryTable.name)
     )
     result = await db_connection.execute(statement)

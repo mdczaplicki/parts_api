@@ -8,7 +8,7 @@ from parts_api.db import PrimaryKeyUUIDTableMixin, BaseModel
 
 
 class ModelTable(PrimaryKeyUUIDTableMixin, Timestamp, BaseModel):
-    name: Mapped[str] = mapped_column(unique=True)
+    name: Mapped[str]
     manufacturer_uuid: Mapped[UUID] = mapped_column(
         ForeignKey("manufacturer.uuid", ondelete="CASCADE")
     )

@@ -1,7 +1,8 @@
 import asyncio
-from asyncio import TaskGroup, BoundedSemaphore, Task
+from asyncio import BoundedSemaphore
 from time import time
-from typing import Final, Generator, NamedTuple
+from typing import Final, NamedTuple
+from uuid import UUID
 
 from aiohttp import ClientSession
 from bs4 import BeautifulSoup, Tag, SoupStrainer
@@ -16,7 +17,6 @@ from parts_api.part.schema import CreatePartTuple
 
 _BASE_URL: Final[URL] = URL("https://www.urparts.com/")
 _CATALOGUE_PATH: Final[str] = "index.cfm/page/catalogue"
-
 _SEMAPHORE = BoundedSemaphore(50)
 
 
@@ -27,118 +27,115 @@ class TagInfo(NamedTuple):
 
 async def _get_tag_from_url(session: ClientSession, url: URL) -> Tag:
     async with _SEMAPHORE:
-        response = await session.get(url)
-        content = await response.text()
+        async with session.get(url) as response:
+            content = await response.text()
     strainer = SoupStrainer(id="content")
-    html_soup = BeautifulSoup(content, "html.parser", parse_only=strainer)
-    return html_soup
+    return BeautifulSoup(content, "html.parser", parse_only=strainer)
 
 
 async def _get_tag(session: ClientSession, path: str) -> Tag:
     return await _get_tag_from_url(session, _BASE_URL / path)
 
 
-def stream_manufacturers(catalogue_tag: Tag) -> Generator[TagInfo, None, None]:
-    tags = catalogue_tag.select("div.allmakes > * a")
-    for tag in tags:
-        yield TagInfo(name=tag.text.strip(), path=tag["href"])
+def stream_manufacturers(catalogue_tag: Tag):
+    for tag in catalogue_tag.select("div.allmakes > * a"):
+        yield TagInfo(tag.text.strip(), tag["href"])
 
 
-def stream_categories(manufacturer_tag: Tag) -> Generator[TagInfo, None, None]:
-    tags = manufacturer_tag.select("div.allcategories > * a")
-    for tag in tags:
-        yield TagInfo(name=tag.text.strip(), path=tag["href"])
+def stream_categories(tag: Tag):
+    for tag in tag.select("div.allcategories > * a"):
+        yield TagInfo(tag.text.strip(), tag["href"])
 
 
-def stream_models(category_tag: Tag) -> Generator[TagInfo, None, None]:
-    tags = category_tag.select("div.allmodels > * a")
-    for tag in tags:
-        yield TagInfo(name=tag.text.strip(), path=tag["href"])
+def stream_models(tag: Tag):
+    for tag in tag.select("div.allmodels > * a"):
+        yield TagInfo(tag.text.strip(), tag["href"])
 
 
-def stream_parts(model_tag: Tag) -> Generator[TagInfo, None, None]:
-    tags = model_tag.select("div.allparts > * a")
-    for tag in tags:
+def stream_parts(tag: Tag):
+    for tag in tag.select("div.allparts > * a"):
         part_number = tag.text.split("-")[0].strip()
-        yield TagInfo(name=part_number, path=tag["href"])
+        yield TagInfo(part_number, tag["href"])
 
 
-async def main() -> None:
-    now = time()
-    async with ClientSession() as session:
-        catalogue_tag = await _get_tag(session, _CATALOGUE_PATH)
-        manufacturer_tasks: list[tuple[str, Task]] = []
-        print(".")
-        async with TaskGroup() as task_group:
-            for manufacturer in stream_manufacturers(catalogue_tag):
-                manufacturer_tasks.append(
-                    (
-                        manufacturer.name,
-                        task_group.create_task(_get_tag(session, manufacturer.path)),
-                    )
-                )
-        print(".")
-        await clear_manufacturers()
-        manufacturer_name_to_uuid = await insert_many_manufacturers(
-            [name for name, _ in manufacturer_tasks]
-        )
-        print(manufacturer_name_to_uuid)
-        category_tasks: list[tuple[str, str, Task]] = []
-        async with TaskGroup() as task_group:
-            for (
-                manufacturer_name,
-                manufacturer_task,
-            ) in manufacturer_tasks:
-                for category in stream_categories(manufacturer_task.result()):
-                    category_tasks.append(
-                        (
-                            manufacturer_name,
-                            category.name,
-                            task_group.create_task(_get_tag(session, category.path)),
-                        )
-                    )
-        print(".")
-        await clear_categories()
-        category_name_to_uuid = await insert_many_categories(
-            {name for _, name, __ in category_tasks}
-        )
-        print(category_name_to_uuid)
-        model_tasks: list[tuple[str, str, str, Task]] = []
-        async with TaskGroup() as task_group:
-            for manufacturer_name, category_name, category_task in category_tasks:
-                for model in stream_models(category_task.result()):
-                    model_tasks.append(
-                        (
-                            manufacturer_name,
-                            category_name,
-                            model.name,
-                            task_group.create_task(_get_tag(session, model.path)),
-                        )
-                    )
-        print(".")
-        await clear_models()
+async def process_model(session: ClientSession, model: TagInfo, model_uuid: UUID) -> list[CreatePartTuple]:
+    model_tag = await _get_tag(session, model.path)
+    insert_buffer: list[CreatePartTuple] = []
+
+    for part in stream_parts(model_tag):
+        if part.name is None:
+            print(model.name)
+        insert_buffer.append(CreatePartTuple(part.name, model_uuid))
+
+    return insert_buffer
+
+
+async def process_manufacturer(
+    session: ClientSession,
+    manufacturer: TagInfo,
+    manufacturer_uuid: UUID,
+    category_name_to_uuid: dict[str, UUID],
+) -> dict[str, UUID]:
+    manufacturer_tag = await _get_tag(session, manufacturer.path)
+
+    categories = list(stream_categories(manufacturer_tag))
+    category_name_to_uuid |= await insert_many_categories({c.name for c in categories})
+
+    for category in categories:
+        category_tag = await _get_tag(session, category.path)
+        models = list(stream_models(category_tag))
+
+        if not models:
+            continue
         model_name_to_uuid = await insert_many_models(
             [
                 CreateModelTuple(
-                    name=model_name,
-                    manufacturer_uuid=manufacturer_name_to_uuid[manufacturer_name],
-                    category_uuid=category_name_to_uuid[category_name],
+                    name=m.name,
+                    manufacturer_uuid=manufacturer_uuid,
+                    category_uuid=category_name_to_uuid[category.name],
                 )
-                for manufacturer_name, category_name, model_name, _ in model_tasks
+                for m in models
             ]
         )
-        print(model_name_to_uuid)
-        for manufacturer_name, category_name, model_name, model_task in model_tasks:
-            insert_buffer = []
-            for part in stream_parts(model_task.result()):
-                insert_buffer.append(
-                    CreatePartTuple(part.name, model_name_to_uuid[model_name])
-                )
-                if len(insert_buffer) >= 50:
-                    await insert_many_parts(insert_buffer)
-                    insert_buffer = []
 
-    print("Processing time: ", time() - now)
+        # Process models concurrently
+        insert_buffers = await asyncio.gather(*[
+            process_model(session, model, model_name_to_uuid[model.name])
+            for model in models
+        ])
+        for insert_buffer in insert_buffers:
+            if insert_buffer:
+                await insert_many_parts(insert_buffer)
+    return category_name_to_uuid
+
+
+async def main():
+    start = time()
+    async with ClientSession() as session:
+        catalogue_tag = await _get_tag(session, _CATALOGUE_PATH)
+        manufacturers = list(stream_manufacturers(catalogue_tag))
+
+        await clear_manufacturers()
+        manufacturer_name_to_uuid = await insert_many_manufacturers(
+            [m.name for m in manufacturers]
+        )
+
+        await clear_categories()
+        await clear_models()
+        category_name_to_uuid = {}
+
+        for manufacturer in manufacturers:
+            if manufacturer.name != "Volvo":
+                continue
+            print(f"Processing: {manufacturer.name}")
+            category_name_to_uuid = await process_manufacturer(
+                session,
+                manufacturer,
+                manufacturer_name_to_uuid[manufacturer.name],
+                category_name_to_uuid,
+            )
+
+    print("Done. Total time:", time() - start)
 
 
 if __name__ == "__main__":
