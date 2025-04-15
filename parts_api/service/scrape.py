@@ -17,6 +17,7 @@ from parts_api.part.schema import CreatePartTuple
 
 _BASE_URL: Final[URL] = URL("https://www.urparts.com/")
 _CATALOGUE_PATH: Final[str] = "index.cfm/page/catalogue"
+_HEADERS: Final[dict[str, str]] = {"User-Agent": "Google Chrome"}
 _SEMAPHORE = BoundedSemaphore(50)
 
 
@@ -27,7 +28,7 @@ class TagInfo(NamedTuple):
 
 async def _get_tag_from_url(session: ClientSession, url: URL) -> Tag:
     async with _SEMAPHORE:
-        async with session.get(url) as response:
+        async with session.get(url, headers=_HEADERS) as response:
             content = await response.text()
     strainer = SoupStrainer(id="content")
     return BeautifulSoup(content, "html.parser", parse_only=strainer)
@@ -143,8 +144,6 @@ async def main():
         category_name_to_uuid = {}
 
         for manufacturer in manufacturers:
-            if manufacturer.name != "Volvo":
-                continue
             print(f"Processing: {manufacturer.name}")
             category_name_to_uuid = await process_manufacturer(
                 session,
