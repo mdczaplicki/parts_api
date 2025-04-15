@@ -36,9 +36,16 @@ async def select_parts(
     name: str | None,
     uuid: UUID | None,
     model_uuid: UUID | None,
+    page: int,
+    page_size: int,
     db_connection: AsyncConnection,
 ) -> list[Part]:
-    statement = select(PartTable.name, PartTable.uuid, PartTable.model_uuid)
+    statement = (
+        select(PartTable.name, PartTable.uuid, PartTable.model_uuid)
+        .offset(page * page_size)
+        .limit(page_size)
+        .order_by(PartTable.name)
+    )
     if name is not None:
         statement = statement.where(PartTable.name == name)
     if uuid is not None:

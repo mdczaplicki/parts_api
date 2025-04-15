@@ -13,5 +13,7 @@ async def get_parts(
     name: str | None = None,
     uuid: UUID | None = None,
     model_uuid: UUID | None = None,
+    page: int = 0,
+    page_size: int = 100,
 ) -> list[Part]:
-    return await select_parts(name, uuid, model_uuid)
+    return await select_parts(name, uuid, model_uuid, page, page_size)
