@@ -58,7 +58,9 @@ def stream_parts(tag: Tag):
         yield TagInfo(part_number, tag["href"])
 
 
-async def process_model(session: ClientSession, model: TagInfo, model_uuid: UUID) -> list[CreatePartTuple]:
+async def process_model(
+    session: ClientSession, model: TagInfo, model_uuid: UUID
+) -> list[CreatePartTuple]:
     model_tag = await _get_tag(session, model.path)
     insert_buffer: list[CreatePartTuple] = []
 
@@ -68,6 +70,39 @@ async def process_model(session: ClientSession, model: TagInfo, model_uuid: UUID
         insert_buffer.append(CreatePartTuple(part.name, model_uuid))
 
     return insert_buffer
+
+
+async def process_category(
+    session: ClientSession,
+    category: TagInfo,
+    manufacturer_uuid: UUID,
+    category_name_to_uuid: dict[str, UUID],
+) -> None:
+    category_tag = await _get_tag(session, category.path)
+    models = list(stream_models(category_tag))
+
+    if not models:
+        return
+    model_name_to_uuid = await insert_many_models(
+        [
+            CreateModelTuple(
+                name=m.name,
+                manufacturer_uuid=manufacturer_uuid,
+                category_uuid=category_name_to_uuid[category.name],
+            )
+            for m in models
+        ]
+    )
+
+    insert_buffers = await asyncio.gather(
+        *(
+            process_model(session, model, model_name_to_uuid[model.name])
+            for model in models
+        )
+    )
+    for insert_buffer in insert_buffers:
+        if insert_buffer:
+            await insert_many_parts(insert_buffer)
 
 
 async def process_manufacturer(
@@ -81,31 +116,14 @@ async def process_manufacturer(
     categories = list(stream_categories(manufacturer_tag))
     category_name_to_uuid |= await insert_many_categories({c.name for c in categories})
 
-    for category in categories:
-        category_tag = await _get_tag(session, category.path)
-        models = list(stream_models(category_tag))
-
-        if not models:
-            continue
-        model_name_to_uuid = await insert_many_models(
-            [
-                CreateModelTuple(
-                    name=m.name,
-                    manufacturer_uuid=manufacturer_uuid,
-                    category_uuid=category_name_to_uuid[category.name],
-                )
-                for m in models
-            ]
+    await asyncio.gather(
+        *(
+            process_category(
+                session, category, manufacturer_uuid, category_name_to_uuid
+            )
+            for category in categories
         )
-
-        # Process models concurrently
-        insert_buffers = await asyncio.gather(*[
-            process_model(session, model, model_name_to_uuid[model.name])
-            for model in models
-        ])
-        for insert_buffer in insert_buffers:
-            if insert_buffer:
-                await insert_many_parts(insert_buffer)
+    )
     return category_name_to_uuid
 
 

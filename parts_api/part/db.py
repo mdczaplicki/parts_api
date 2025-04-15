@@ -16,15 +16,14 @@ async def clear_parts(db_connection: AsyncConnection) -> None:
 async def insert_many_parts(
     create_schemas: list[CreatePartTuple], db_connection: AsyncConnection
 ) -> None:
-    statement = (
-        insert(PartTable)
-        .returning(PartTable.uuid, PartTable.name)
+    statement = insert(PartTable).returning(PartTable.uuid, PartTable.name)
+    await db_connection.execute(
+        statement,
+        [
+            {
+                "name": s.name,
+                "model_uuid": s.model_uuid,
+            }
+            for s in create_schemas
+        ],
     )
-    await db_connection.execute(statement,
-            [
-                {
-                    "name": s.name,
-                    "model_uuid": s.model_uuid,
-                }
-                for s in create_schemas
-            ])
