@@ -1,8 +1,10 @@
-from sqlalchemy import insert, delete
+from uuid import UUID
+
+from sqlalchemy import insert, delete, select
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from parts_api.db import inject_db_connection
-from parts_api.part.schema import CreatePartTuple
+from parts_api.part.schema import CreatePartTuple, Part
 from parts_api.part.table import PartTable
 
 
@@ -27,3 +29,21 @@ async def insert_many_parts(
             for s in create_schemas
         ],
     )
+
+
+@inject_db_connection
+async def select_parts(
+    name: str | None,
+    uuid: UUID | None,
+    model_uuid: UUID | None,
+    db_connection: AsyncConnection,
+) -> list[Part]:
+    statement = select(PartTable.name, PartTable.uuid, PartTable.model_uuid)
+    if name is not None:
+        statement = statement.where(PartTable.name == name)
+    if uuid is not None:
+        statement = statement.where(PartTable.uuid == uuid)
+    if model_uuid is not None:
+        statement = statement.where(PartTable.model_uuid == model_uuid)
+    result = await db_connection.execute(statement)
+    return [Part.model_validate(row, from_attributes=True) for row in result]
