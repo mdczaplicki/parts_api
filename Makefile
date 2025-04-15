@@ -7,6 +7,9 @@ check:
 	uv run ruff format --check .
 	uv run mypy .
 
+test:
+	DATABASE_CONNECTION_STRING="postgresql+asyncpg://parts:parts@localhost:5432/parts-db" uv run pytest .
+
 build:
 	docker compose build base_app
 

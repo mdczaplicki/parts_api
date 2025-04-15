@@ -5,14 +5,15 @@ The purpose of this API is to expose alle the data that were available to scrape
 We're using `uv` to manage our dependencies.
 
 ## How to use
-There is a Make file with a couple of handy recipes. Let's go through them
-1. `make format` reformats whole codebase using `ruff`
-2. `make check` does static code analysis using `ruff` & `mypy`
-3. `make build` builds a Docker image for the application
-4. `make migrate` applies `alembic` migrations to the database
-5. `make scrape` runs the data scraping process
-6. `make up` runs the API
-7. `make down` puts down all Docker containers
+There is a Make file with a couple of handy recipes. Let's go through them:
+1. `make format` reformats whole codebase using `ruff`;
+2. `make check` does static code analysis using `ruff` & `mypy`;
+3. `make test` runs test suite for whole application;
+4. `make build` builds a Docker image for the application;
+5. `make migrate` applies `alembic` migrations to the database;
+6. `make scrape` runs the data scraping process;
+7. `make up` runs the API;
+8. `make down` puts down all Docker containers.
 
 ## Scraper
 ### Solution
@@ -39,3 +40,7 @@ The OpenAPI specification can be found here: http://localhost:8080/docs after st
 Overall structure of the repository & API is based on domains. Each domain has its own category & directory.
 
 For the simplicity of the solution - `service`/`controller` layer wasn't introduced.
+
+### Tests
+For demonstration purposes, there's just one test written.  
+It won't work if you have any category in the database (there's no schema separation). 

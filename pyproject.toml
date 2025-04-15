@@ -15,6 +15,9 @@ dependencies = [
     "psycopg2-binary>=2.9.10",
     "pydantic>=2.11.3",
     "pydantic-settings>=2.8.1",
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.26.0",
+    "pytest-mock>=3.14.0",
     "ruff>=0.11.5",
     "sqlalchemy>=2.0.40",
     "sqlalchemy-utils>=0.41.2",
@@ -26,3 +29,11 @@ dependencies = [
 [project.scripts]
 scrape = "parts_api.worker.scrape:sync_main"
 
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.mypy]
+python_version = "3.13"
+exclude = [
+    '^build/.*'
+]

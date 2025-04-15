@@ -144,7 +144,7 @@ async def main() -> None:
         manufacturer_name_to_uuid = await insert_many_manufacturers(
             [m.name for m in manufacturers]
         )
-        category_name_to_uuid = {}
+        category_name_to_uuid: dict[str, UUID] = {}
 
         for manufacturer in manufacturers:
             _LOGGER.info(f"Processing: {manufacturer.name}")
