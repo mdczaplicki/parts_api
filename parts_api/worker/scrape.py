@@ -1,7 +1,7 @@
 import asyncio
 from asyncio import BoundedSemaphore
 from time import time
-from typing import Final, NamedTuple
+from typing import Final, NamedTuple, cast
 from uuid import UUID
 
 from aiohttp import ClientSession
@@ -40,23 +40,23 @@ async def _get_tag(session: ClientSession, path: str) -> Tag:
 
 def stream_manufacturers(catalogue_tag: Tag):
     for tag in catalogue_tag.select("div.allmakes > * a"):
-        yield TagInfo(tag.text.strip(), tag["href"])
+        yield TagInfo(tag.text.strip(), cast(str, tag["href"]))
 
 
 def stream_categories(tag: Tag):
     for tag in tag.select("div.allcategories > * a"):
-        yield TagInfo(tag.text.strip(), tag["href"])
+        yield TagInfo(tag.text.strip(), cast(str, tag["href"]))
 
 
 def stream_models(tag: Tag):
     for tag in tag.select("div.allmodels > * a"):
-        yield TagInfo(tag.text.strip(), tag["href"])
+        yield TagInfo(tag.text.strip(), cast(str, tag["href"]))
 
 
 def stream_parts(tag: Tag):
     for tag in tag.select("div.allparts > * a"):
         part_number = tag.text.split("-")[0].strip()
-        yield TagInfo(part_number, tag["href"])
+        yield TagInfo(part_number, cast(str, tag["href"]))
 
 
 async def process_model(

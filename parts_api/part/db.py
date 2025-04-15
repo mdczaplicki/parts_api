@@ -1,6 +1,7 @@
 from uuid import UUID
 
-from sqlalchemy import insert, delete, select
+from sqlalchemy import delete, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from parts_api.db import inject_db_connection
@@ -18,7 +19,7 @@ async def clear_parts(db_connection: AsyncConnection) -> None:
 async def insert_many_parts(
     create_schemas: list[CreatePartTuple], db_connection: AsyncConnection
 ) -> None:
-    statement = insert(PartTable).returning(PartTable.uuid, PartTable.name)
+    statement = insert(PartTable).on_conflict_do_nothing()
     await db_connection.execute(
         statement,
         [

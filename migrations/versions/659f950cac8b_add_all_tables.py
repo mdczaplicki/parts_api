@@ -1,8 +1,8 @@
-"""Create all tables
+"""Add all tables
 
-Revision ID: d7747549933f
+Revision ID: 659f950cac8b
 Revises:
-Create Date: 2025-04-15 00:29:11.775249
+Create Date: 2025-04-15 22:03:28.700580
 
 """
 
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "d7747549933f"
+revision: str = "659f950cac8b"
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -72,7 +72,6 @@ def upgrade() -> None:
             ["manufacturer_uuid"], ["manufacturer.uuid"], ondelete="CASCADE"
         ),
         sa.PrimaryKeyConstraint("uuid"),
-        sa.UniqueConstraint("name"),
     )
     op.create_index(op.f("ix_model_uuid"), "model", ["uuid"], unique=True)
     op.create_table(
@@ -89,6 +88,7 @@ def upgrade() -> None:
         sa.Column("updated", sa.DateTime(), nullable=False),
         sa.ForeignKeyConstraint(["model_uuid"], ["model.uuid"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("uuid"),
+        sa.UniqueConstraint("name", "model_uuid", name="unique_name_and_model_uuid"),
     )
     op.create_index(op.f("ix_part_uuid"), "part", ["uuid"], unique=True)
     # ### end Alembic commands ###

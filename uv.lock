@@ -360,6 +360,7 @@ dependencies = [
     { name = "ruff" },
     { name = "sqlalchemy" },
     { name = "sqlalchemy-utils" },
+    { name = "types-sqlalchemy-utils" },
     { name = "uvicorn" },
     { name = "yarl" },
 ]
@@ -379,6 +380,7 @@ requires-dist = [
     { name = "ruff", specifier = ">=0.11.5" },
     { name = "sqlalchemy", specifier = ">=2.0.40" },
     { name = "sqlalchemy-utils", specifier = ">=0.41.2" },
+    { name = "types-sqlalchemy-utils", specifier = ">=1.1.0" },
     { name = "uvicorn", specifier = ">=0.34.1" },
     { name = "yarl", specifier = ">=1.19.0" },
 ]
@@ -594,6 +596,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ce/20/08dfcd9c983f6a6f4a1000d934b9e6d626cff8d2eeb77a89a68eef20a2b7/starlette-0.46.2.tar.gz", hash = "sha256:7f7361f34eed179294600af672f565727419830b54b7b084efe44bb82d2fccd5", size = 2580846 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8b/0c/9d30a4ebeb6db2b25a841afbb80f6ef9a854fc3b41be131d249a977b4959/starlette-0.46.2-py3-none-any.whl", hash = "sha256:595633ce89f8ffa71a015caed34a5b2dc1c0cdb3f0f1fbd1e69339cf2abeec35", size = 72037 },
+]
+
+[[package]]
+name = "types-sqlalchemy-utils"
+version = "1.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a5/5d/747310a5b105facc74c5b466e3e234f187df6bd5168dba6e28884f9be4d8/types_sqlalchemy_utils-1.1.0.tar.gz", hash = "sha256:af9d92992687c9e7c920b9a1b814fd10915b9b3a7b1f731b7fd2fff8ce2f3bfb", size = 22676 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4d/82/ff6cd783b288130577cb516d1f65d8efb650bcd7723d0e7774f632b3df16/types_sqlalchemy_utils-1.1.0-py3-none-any.whl", hash = "sha256:60b28fe3453f67fc90bb0a106063025cffc1efa6eedb59a7ea5b043644c3d16a", size = 38415 },
 ]
 
 [[package]]
