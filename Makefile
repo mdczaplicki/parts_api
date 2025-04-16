@@ -1,3 +1,5 @@
+.PHONY: format check test build migrate scrape up down
+
 format:
 	uv run ruff check --fix .
 	uv run ruff format .

@@ -16,3 +16,4 @@ async def test_insert_many_categories(async_connection: AsyncConnection) -> None
     statement = select(CategoryTable)
     result = await async_connection.execute(statement)
     assert len(list(result)) == len(names)
+    assert set(row.name for row in result) == set(names)
